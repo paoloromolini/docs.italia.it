@@ -26,7 +26,7 @@ class Publisher(models.Model):
 
     The publisher and the project homepage are handled by a django view.
     """
-    # Auto fields                                                                                        
+    # Auto fields
     pub_date = models.DateTimeField(_('Publication date'), auto_now_add=True)
     modified_date = models.DateTimeField(_('Modified date'), auto_now=True)
 
