@@ -10,7 +10,7 @@ from readthedocs.oauth.services.github import GitHubService
 from readthedocs.oauth.models import RemoteOrganization, RemoteRepository
 from readthedocs.restapi.client import api
 
-from ..models import Publisher
+from ..models import Publisher, parse_metadata_repo, create_projects_from_metadata
 
 log = logging.getLogger(__name__)
 
@@ -45,11 +45,11 @@ class DocsItaliaGithubService(GitHubService):
                     log.debug('Syncing GitHub organizations: no metadata repo for {}'.format(publisher))
                     continue
 
-                metadata = publisher.parse_metadata_repo(metadata_repo)
+                metadata = parse_metadata_repo(metadata_repo)
                 publisher.metadata = metadata
                 publisher.save()
+                create_projects_from_metadata(metadata)
 
-                whitelisted_repos = publisher.repos_whitelist()
                 # Add repos
                 # TODO ?per_page=100
                 org_repos = self.paginate(
@@ -57,8 +57,6 @@ class DocsItaliaGithubService(GitHubService):
                 )
 
                 for repo in org_repos:
-                    if repo['name'] not in whitelisted_repos:
-                        continue
                     self.create_repository(repo, organization=org_obj)
 
                 # TODO: set active=False for projects that are not whitelisted anymore

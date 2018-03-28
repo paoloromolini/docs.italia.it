@@ -10,10 +10,24 @@ from readthedocs.projects.models import Project
 from readthedocs.oauth.models import RemoteOrganization
 
 
+# TODO
+def parse_metadata_repo(self, metadata_repo):
+    return """{}"""
+
+
+# TODO
+def create_projects_from_metadata(metadata):
+    slugs = []
+    for project in metadata['projects']:
+        pass
+    # TODO: double check this
+    PublisherProjects.objects.exclude(slug__in=slugs).update(active=False)
+
+
 @python_2_unicode_compatible
 class Publisher(models.Model):
     """
-    The Publisher is the organization that hosts projects
+    The Publisher is the organization that hosts projects (PublisherProject)
 
     The idea is to tie a Publisher to a RemoteOrganization, if we have a
     Publisher instance for a RemoteOrganization we can sync its data as
@@ -24,7 +38,7 @@ class Publisher(models.Model):
     of truth. A parsed version of the configuration is saved in the metadata
     field.
 
-    The publisher and the project homepage are handled by a django view.
+    The publisher homepage is handled by a django view with data from the metadata field.
     """
     # Auto fields
     pub_date = models.DateTimeField(_('Publication date'), auto_now_add=True)
@@ -40,8 +54,6 @@ class Publisher(models.Model):
     # the name of the repository that will hold the metadata
     config_repo_name = models.CharField(_('Docs italia config repo'), default=u'docs-italia-conf')
 
-    # the projects linked to the organization, should be the one in the metadata
-    projects = models.ManyToManyField(_('Projects'), Project)
     # the same publisher may have projects in multiple platforms
     remote_organization = models.ManyToMany(_('Remote organization'), RemoteOrganization)
 
@@ -50,10 +62,32 @@ class Publisher(models.Model):
     def __str__(self):
         return self.name
 
-    # TODO
-    def repos_whitelist(self):
-        return []
 
-    # TODO
-    def parse_metadata_repo(self, metadata_repo):
-        return """{}"""
+class PublisherProject(models.Model):
+    """
+    The PublisherProject is the project that contains documents
+
+    These are created from the organization metadata and created at import time
+
+    The publisher project homepage is handled by a django view with data from the metadata field.
+    """
+    # Auto fields
+    pub_date = models.DateTimeField(_('Publication date'), auto_now_add=True)
+    modified_date = models.DateTimeField(_('Modified date'), auto_now=True)
+
+    # we need something unique
+    name = models.CharField(_('Name'), max_length=255, unique=True)
+    slug = models.SlugField(_('slug'), max_length=255, unique=True)
+
+    # this holds the metadata for the single project
+    metadata = models.JSONField(_('Metadata'), blank=True)
+
+    # the organization that holds the project
+    publisher = models.ForeignKey(_('Publisher'), Publisher)
+    # projects are the documents :) TODO: update this at import time
+    projects = models.ManyToMany(_('Projects'), Project)
+
+    active = models.BooleanField(_('Active'), default=False)
+
+    def __str__(self):
+        return self.name
