@@ -5,23 +5,25 @@ from django.db import models
 from django.contrib.postgres.fields import JSONField
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
+from django.utils.text import slugify
 
 from readthedocs.projects.models import Project
 from readthedocs.oauth.models import RemoteOrganization
 
-
-# TODO
-def parse_metadata_repo(self, metadata_repo):
-    return """{}"""
+from .utils import load_yaml
 
 
-# TODO
-def create_projects_from_metadata(metadata):
-    slugs = []
-    for project in metadata['projects']:
-        pass
-    # TODO: double check this
-    PublisherProjects.objects.exclude(slug__in=slugs).update(active=False)
+# TODO: do the validation :)
+def validate_publisher_metadata(settings):
+    return load_yaml(settings)
+
+
+# TODO: do the validation :)
+def validate_projects_metadata(settings):
+    return load_yaml(settings)
+
+
+
 
 
 @python_2_unicode_compatible
@@ -50,7 +52,9 @@ class Publisher(models.Model):
 
     # TODO: is this enough to hold the publisher metadata?
     # https://github.com/italia/docs-italia-starter-kit/tree/master/repo-configurazione
-    metadata = models.JSONField(_('Metadata'), blank=True)
+    metadata = models.JSONField(_('Publisher Metadata'), blank=True)
+    projects_metadata = models.JSONField(_('Projects Metadata'), blank=True)
+
     # the name of the repository that will hold the metadata
     config_repo_name = models.CharField(_('Docs italia config repo'), default=u'docs-italia-conf')
 
@@ -61,6 +65,30 @@ class Publisher(models.Model):
 
     def __str__(self):
         return self.name
+
+    def create_projects_from_metadata(self, settings):
+        slugs = []
+        for project in settings['projects']:
+            slug = slugify(project['name'])
+            proj, created = PublisherProjects.objects.get_or_create(
+                publisher=self,
+                name=project['name'],
+                slug=slug
+            )
+            proj.metadata = project
+            proj.active = True
+            proj.save()
+
+            slugs.append(slug)
+
+        # TODO: double check this is something we want
+        PublisherProjects.objects.filter(
+            publisher=self
+        ).exclude(
+            slug__in=slugs
+        ).update(
+            active=False
+        )
 
 
 class PublisherProject(models.Model):

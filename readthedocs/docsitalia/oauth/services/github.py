@@ -10,15 +10,24 @@ from readthedocs.oauth.services.github import GitHubService
 from readthedocs.oauth.models import RemoteOrganization, RemoteRepository
 from readthedocs.restapi.client import api
 
-from ..models import Publisher, parse_metadata_repo, create_projects_from_metadata
+from ..models import (
+    Publisher, validate_publisher_metadata, validate_projects_metadata)
 
 log = logging.getLogger(__name__)
+
+METADATA_BASE_URL = 'https://raw.githubusercontent.com/{org}/{repo}/master/{settings}'
 
 
 class DocsItaliaGithubService(GitHubService):
     def sync(self):
         """Sync organizations."""
         self.sync_organizations()
+
+    def get_metadata_for_organization(self, org, repo, settings):
+        # FIXME: error handling
+        url = METADATA_BASE_URL.format(
+            org=org, repo=repo, settings=settings)
+        return self.paginate(url)
 
     def sync_organizations(self):
         """Sync organizations from GitHub API."""
@@ -33,22 +42,44 @@ class DocsItaliaGithubService(GitHubService):
                     continue
 
                 publisher = Publisher.objects.get(organizations=org_obj, active=True)
-                metadata_repo = self.paginate(
-                    'https://api.github.com/repos/{org_login}/{docs_italia_conf}'.format(
-                        org_login=org_object.slug,
-                        docs_italia_conf=publisher.config_repo_name
-                    )
-                )
+                publisher_settings = self.get_metadata_for_organization(
+                    org=org_object.slug,
+                    repo=publisher.config_repo_name,
+                    settings='publisher_settings.yml')
 
-                # no metadata no party
-                if not metadata_repo:
-                    log.debug('Syncing GitHub organizations: no metadata repo for {}'.format(publisher))
+                if not publisher_settings:
+                    log.debug('Syncing GitHub organizations: no publisher metadata for {}'.format(
+                        publisher))
                     continue
 
-                metadata = parse_metadata_repo(metadata_repo)
-                publisher.metadata = metadata
+                try:
+                    publisher_metadata = validate_publisher_metadata(publisher_settings)
+                except ValueError:
+                    log.debug('Syncing GitHub organizations: invalid publisher metadata for {}'.format(
+                        publisher))
+                    continue
+
+                projects_settings = self.get_metadata_for_organization(
+                    org=org_object.slug,
+                    repo=publisher.config_repo_name,
+                    settings='projects_settings.yml')
+
+                if not projects_settings:
+                    log.debug('Syncing GitHub organizations: no projects metadata for {}'.format(
+                        publisher))
+                    continue
+
+                try:
+                    projects_metadata = validate_projects_metadata(projects_settings)
+                except ValueError:
+                    log.debug('Syncing GitHub organizations: invalid projects metadata for {}'.format(
+                        publisher))
+                    continue
+
+                publisher.metadata = publisher_metadata
+                publisher.projects_metadata = projects_metadata
                 publisher.save()
-                create_projects_from_metadata(metadata)
+                publisher.create_projects_from_metadata(projects_metadata)
 
                 # Add repos
                 # TODO ?per_page=100
