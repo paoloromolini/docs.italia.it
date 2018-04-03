@@ -7,7 +7,7 @@ from elasticmock import FakeElasticsearch
 from mock import patch
 
 from readthedocs.projects.models import Project
-from readthedocs.search.indexes import ProjectIndex
+from readthedocs.search.indexes import ProjectIndex, PageIndex
 from readthedocs.rtd_tests.mocks.mock_indexes import MockIndex
 
 
@@ -24,8 +24,17 @@ class TestSearch(TestCase):
         index = ProjectIndex(elasticsearch_class=FakeElasticsearch)
         self.assertTrue(index)
 
+    def test_page_index(self):
+        index = PageIndex(elasticsearch_class=FakeElasticsearch)
+        self.assertTrue(index)
+
     @patch('readthedocs.search.indexes.ProjectIndex', new_callable=MockIndex)
     def test_search_project(self, mock_index):
         from readthedocs.search.lib import search_project
         foo = search_project({}, "ciao")
         self.assertTrue(foo)
+
+    @patch('readthedocs.search.indexes.PageIndex', new_callable=MockIndex)
+    def test_search_file(self, mock_index):
+        from readthedocs.search.lib import search_file
+        foo = search_file({}, "ciao")
